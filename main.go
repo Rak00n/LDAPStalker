@@ -17,6 +17,7 @@ var domainName string
 var adminUsername string
 var adminPassword string
 var action string
+var searchRequest *ldap.SearchRequest
 
 func init() {
 	flag.StringVar(&action, "action", "print", "Action to execute. \"print\" - prints all the data to stdout; \"dump\" - save all LDAP data into file ldap.dump; \"monitor\" - start monitoring changes of LDAP")
@@ -28,8 +29,13 @@ func init() {
 	flag.Parse()
 }
 
-func stalkerPrint(entries []*ldap.Entry) {
-	for _, entry := range entries {
+func stalkerPrint(bind *ldap.Conn) {
+
+	sr, err := bind.Search(searchRequest)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, entry := range sr.Entries {
 		fmt.Println(entry.DN)
 		for _, attr := range entry.Attributes {
 			value := entry.GetAttributeValue(attr.Name)
@@ -49,12 +55,16 @@ func stalkerPrint(entries []*ldap.Entry) {
 		}
 	}
 }
-func stalkerDump(entries []*ldap.Entry) {
+func stalkerDump(bind *ldap.Conn) {
 	fi, err := os.Create("ldap.dump")
 	if err != nil {
 		panic(err)
 	}
-	for _, entry := range entries {
+	sr, err := bind.Search(searchRequest)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, entry := range sr.Entries {
 		_, err = fi.WriteString(entry.DN + "\r\n")
 		for _, attr := range entry.Attributes {
 			value := entry.GetAttributeValue(attr.Name)
@@ -95,13 +105,12 @@ func main() {
 	//if err != nil {
 	//	log.Fatal(err)
 	//}
-
 	err = l.Bind(bindusername, bindpassword)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	searchRequest := ldap.NewSearchRequest(
+	searchRequest = ldap.NewSearchRequest(
 		baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		"(cn=*)",
@@ -109,16 +118,11 @@ func main() {
 		nil,
 	)
 
-	sr, err := l.Search(searchRequest)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	if action == "print" {
-		stalkerPrint(sr.Entries)
+		stalkerPrint(l)
 	}
 	if action == "dump" {
-		stalkerDump(sr.Entries)
+		stalkerDump(l)
 	}
 	if action == "monitor" {
 		//stalkerMonitor(sr.Entries)
