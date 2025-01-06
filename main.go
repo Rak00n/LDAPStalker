@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"unicode"
 )
 
@@ -74,7 +75,14 @@ func stalkerDump(entries []*ldap.Entry) {
 	fi.Close()
 }
 func main() {
-	bindusername := domainName + "\\" + adminUsername
+	domainNameSlice := strings.Split(domainName, ".")
+	userDomain := domainNameSlice[0]
+	baseDNSlice := []string{}
+	for _, domain := range domainNameSlice {
+		baseDNSlice = append(baseDNSlice, "dc="+domain)
+	}
+	baseDN := strings.Join(baseDNSlice, ",")
+	bindusername := userDomain + "\\" + adminUsername
 	bindpassword := adminPassword
 	l, err := ldap.DialURL("ldap://" + dcIP + ":" + strconv.Itoa(dcPort))
 	if err != nil {
@@ -94,7 +102,7 @@ func main() {
 	}
 
 	searchRequest := ldap.NewSearchRequest(
-		"dc=test,dc=local",
+		baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		"(cn=*)",
 		[]string{},
@@ -113,6 +121,6 @@ func main() {
 		stalkerDump(sr.Entries)
 	}
 	if action == "monitor" {
-		stalkerMonitor(sr.Entries)
+		//stalkerMonitor(sr.Entries)
 	}
 }
