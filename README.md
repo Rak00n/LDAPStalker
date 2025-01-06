@@ -6,5 +6,7 @@ This tool was developed to troubleshoot intricate AD configurations and monitor 
 
 It is developed because of curiosity in AD internals.
 
+```bash
 LDAPStalker.exe -action print -dcip 192.168.56.106 -dcPort 389 -domain "test" -user "administrator" -password "Y0urD0m@in@dminP@$$w0rd"
+```
 
