@@ -19,6 +19,11 @@ var adminPassword string
 var action string
 var searchRequest *ldap.SearchRequest
 
+type stalkerAttributes struct {
+	attributeName  string
+	attributeValue []byte
+}
+
 func init() {
 	flag.StringVar(&action, "action", "print", "Action to execute. \"print\" - prints all the data to stdout; \"dump\" - save all LDAP data into file ldap.dump; \"monitor\" - start monitoring changes of LDAP")
 	flag.StringVar(&dcIP, "dcip", "127.0.0.1", "LDAP server IP address")
@@ -39,18 +44,21 @@ func stalkerPrint(bind *ldap.Conn) {
 		fmt.Println(entry.DN)
 		for _, attr := range entry.Attributes {
 			values := entry.GetAttributeValues(attr.Name)
-			value := strings.Join(values, ";")
 			printable := true
-			for _, char := range value {
-				if char > unicode.MaxASCII {
-					printable = false
-					break
+			for _, tempVal := range values {
+				for _, char := range tempVal {
+					if (char > unicode.MaxASCII) || (!unicode.IsPrint(char)) {
+						printable = false
+						break
+					}
 				}
+
 			}
+			value := strings.Join(values, ";")
 			if printable {
-				fmt.Println("\t", attr.Name+":", entry.GetAttributeValues(attr.Name))
+				fmt.Println("\t", attr.Name+":", value)
 			} else {
-				fmt.Println("\t", attr.Name+":", fmt.Sprintf("%x", entry.GetRawAttributeValues(attr.Name)))
+				fmt.Println("\t", attr.Name+":", fmt.Sprintf("%x", value))
 			}
 
 		}
@@ -68,25 +76,30 @@ func stalkerDump(bind *ldap.Conn) {
 	for _, entry := range sr.Entries {
 		_, err = fi.WriteString(entry.DN + "\r\n")
 		for _, attr := range entry.Attributes {
-			value := entry.GetAttributeValue(attr.Name)
+			values := entry.GetAttributeValues(attr.Name)
 			printable := true
-			for _, char := range value {
-				if char > unicode.MaxASCII {
-					printable = false
-					break
+			for _, tempVal := range values {
+				for _, char := range tempVal {
+					if (char > unicode.MaxASCII) || (!unicode.IsPrint(char)) {
+						printable = false
+						break
+					}
 				}
+
 			}
+			value := strings.Join(values, ";")
 			if printable {
-				_, err = fi.WriteString("\t" + attr.Name + ": " + entry.GetAttributeValue(attr.Name) + "\r\n")
+				_, err = fi.WriteString("\t" + attr.Name + ": " + value + "\r\n")
 			} else {
-				_, err = fi.WriteString("\t" + attr.Name + ": " + fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)) + "\r\n")
+				newVal := fmt.Sprintf("%x", value)
+				_, err = fi.WriteString("\t" + attr.Name + ": " + newVal + "\r\n")
 			}
 		}
 	}
 	fi.Close()
 }
 func stalkerMonitor(bind *ldap.Conn) {
-	topLevelObjects := make(map[string][]byte)
+	topLevelObjects := make(map[string][]stalkerAttributes)
 	fmt.Println("Waiting for stable LDAP state...")
 	sr, err := bind.Search(searchRequest)
 	if err != nil {
@@ -97,7 +110,7 @@ func stalkerMonitor(bind *ldap.Conn) {
 		fmt.Println(mapKey)
 		_, ok := topLevelObjects[mapKey]
 		if !ok {
-			topLevelObjects[mapKey] = []byte{11, 12}
+			topLevelObjects[mapKey] = []stalkerAttributes{}
 		}
 		for _, attr := range entry.Attributes {
 			value := entry.GetAttributeValue(attr.Name)
