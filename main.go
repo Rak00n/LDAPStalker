@@ -14,17 +14,21 @@ var dcPort int
 var domainName string
 var adminUsername string
 var adminPassword string
+var action string
 
 func init() {
+	flag.StringVar(&action, "action", "print", "Action to execute. \"print\" - prints all the data to stdout; \"dump\" - save all LDAP data into file ldap.dump; \"monitor\" - start monitoring changes of LDAP")
 	flag.StringVar(&dcIP, "dcip", "127.0.0.1", "LDAP server IP address")
 	flag.IntVar(&dcPort, "dcPort", 389, "LDAP server port")
-
+	flag.StringVar(&domainName, "domain", "test", "Your domain name")
+	flag.StringVar(&adminUsername, "user", "administrator", "Domain administrator username")
+	flag.StringVar(&adminPassword, "password", "password", "Domain administrator password")
+	flag.Parse()
 }
 
 func main() {
-	bindusername := "test\\administrator"
-	bindpassword := "sxdzSXDZ!@#123"
-
+	bindusername := domainName + "\\" + adminUsername
+	bindpassword := adminPassword
 	l, err := ldap.DialURL("ldap://" + dcIP + ":" + strconv.Itoa(dcPort))
 	if err != nil {
 		log.Fatal(err)
@@ -37,18 +41,15 @@ func main() {
 	//	log.Fatal(err)
 	//}
 
-	// First bind with a read only user
 	err = l.Bind(bindusername, bindpassword)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Search for the given username
 	searchRequest := ldap.NewSearchRequest(
 		"dc=test,dc=local",
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		"(cn=*)",
-		//[]string{"dn", "objectGUID"},
 		[]string{},
 		nil,
 	)
