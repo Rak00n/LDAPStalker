@@ -1,4 +1,4 @@
-This tool interacts with Windows LDAP server and fetches all acasible data from it.
+This tool interacts with Windows LDAP server and fetches all accessible data from it.
 
 Sometimes it's not clear what changes are made during AD deployment. What accounts are created and what attributes are populated?
 
