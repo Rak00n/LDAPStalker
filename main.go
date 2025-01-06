@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -19,9 +20,9 @@ var adminPassword string
 var action string
 var searchRequest *ldap.SearchRequest
 
-type stalkerAttributes struct {
+type stalkerAttribute struct {
 	attributeName  string
-	attributeValue []byte
+	attributeValue string
 }
 
 func init() {
@@ -99,36 +100,90 @@ func stalkerDump(bind *ldap.Conn) {
 	fi.Close()
 }
 func stalkerMonitor(bind *ldap.Conn) {
-	topLevelObjects := make(map[string][]stalkerAttributes)
+	topLevelObjects := make(map[string][]stalkerAttribute)
 	fmt.Println("Waiting for stable LDAP state...")
-	sr, err := bind.Search(searchRequest)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, entry := range sr.Entries {
-		mapKey := entry.GetAttributeValue("distinguishedName")
-		fmt.Println(mapKey)
-		_, ok := topLevelObjects[mapKey]
-		if !ok {
-			topLevelObjects[mapKey] = []stalkerAttributes{}
+	for {
+		stable := true
+		sr, err := bind.Search(searchRequest)
+		if err != nil {
+			log.Fatal(err)
 		}
-		for _, attr := range entry.Attributes {
-			value := entry.GetAttributeValue(attr.Name)
-			printable := true
-			for _, char := range value {
-				if char > unicode.MaxASCII {
-					printable = false
-					break
+		for _, entry := range sr.Entries {
+			mapKey := entry.GetAttributeValue("distinguishedName")
+			_, ok := topLevelObjects[mapKey]
+			if !ok {
+				//fmt.Println("New object found", mapKey)
+				topLevelObjects[mapKey] = []stalkerAttribute{}
+				stable = false
+			} else {
+				oldAttributes := topLevelObjects[mapKey]
+				for _, attr := range entry.Attributes {
+					values := entry.GetAttributeValues(attr.Name)
+					value := strings.Join(values, ";")
+					attributeFound := false
+					for _, oldAttribute := range oldAttributes {
+						if oldAttribute.attributeName == attr.Name {
+							attributeFound = true
+							if oldAttribute.attributeValue != value {
+								stable = false
+							}
+							break
+						}
+					}
+					if !attributeFound {
+						//fmt.Println("New Attribute Detected", attr.Name+":", value)
+						topLevelObjects[mapKey] = append(topLevelObjects[mapKey], stalkerAttribute{attr.Name, value})
+						stable = false
+					}
+
 				}
 			}
-			if printable {
-				fmt.Println("\t", attr.Name+":", entry.GetAttributeValue(attr.Name))
-			} else {
-				fmt.Println("\t", attr.Name+":", fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
-			}
-
+		}
+		if stable {
+			break
 		}
 	}
+	fmt.Println("Reached stable state. Waiting for changes...")
+	for {
+		time.Sleep(1 * time.Second)
+		sr, err := bind.Search(searchRequest)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, entry := range sr.Entries {
+			mapKey := entry.GetAttributeValue("distinguishedName")
+			_, ok := topLevelObjects[mapKey]
+			if !ok {
+				fmt.Println("New object found", mapKey)
+				topLevelObjects[mapKey] = []stalkerAttribute{}
+			} else {
+				oldAttributes := topLevelObjects[mapKey]
+				for _, attr := range entry.Attributes {
+					values := entry.GetAttributeValues(attr.Name)
+					value := strings.Join(values, ";")
+					attributeFound := false
+					for _, oldAttribute := range oldAttributes {
+						if oldAttribute.attributeName == attr.Name {
+							attributePointer := &oldAttribute.attributeValue
+							//fmt.Println(attributePointer)
+							attributeFound = true
+							if oldAttribute.attributeValue != value {
+								fmt.Println("Attribute changed:", oldAttribute.attributeValue, "->", attr.Name, value)
+								attributePointer = value
+							}
+							break
+						}
+					}
+					if !attributeFound {
+						fmt.Println("New Attribute Detected", attr.Name+":", value)
+						topLevelObjects[mapKey] = append(topLevelObjects[mapKey], stalkerAttribute{attr.Name, value})
+					}
+
+				}
+			}
+		}
+	}
+
 }
 func main() {
 	domainNameSlice := strings.Split(domainName, ".")
