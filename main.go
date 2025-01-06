@@ -21,7 +21,7 @@ func init() {
 	flag.StringVar(&action, "action", "print", "Action to execute. \"print\" - prints all the data to stdout; \"dump\" - save all LDAP data into file ldap.dump; \"monitor\" - start monitoring changes of LDAP")
 	flag.StringVar(&dcIP, "dcip", "127.0.0.1", "LDAP server IP address")
 	flag.IntVar(&dcPort, "dcPort", 389, "LDAP server port")
-	flag.StringVar(&domainName, "domain", "test", "Your domain name")
+	flag.StringVar(&domainName, "domain", "test", "Your domain name (ex: test.local)")
 	flag.StringVar(&adminUsername, "user", "administrator", "Domain administrator username")
 	flag.StringVar(&adminPassword, "password", "password", "Domain administrator password")
 	flag.Parse()
@@ -111,5 +111,8 @@ func main() {
 	}
 	if action == "dump" {
 		stalkerDump(sr.Entries)
+	}
+	if action == "monitor" {
+		stalkerMonitor(sr.Entries)
 	}
 }
