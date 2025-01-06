@@ -38,7 +38,8 @@ func stalkerPrint(bind *ldap.Conn) {
 	for _, entry := range sr.Entries {
 		fmt.Println(entry.DN)
 		for _, attr := range entry.Attributes {
-			value := entry.GetAttributeValue(attr.Name)
+			values := entry.GetAttributeValues(attr.Name)
+			value := strings.Join(values, ";")
 			printable := true
 			for _, char := range value {
 				if char > unicode.MaxASCII {
@@ -47,9 +48,9 @@ func stalkerPrint(bind *ldap.Conn) {
 				}
 			}
 			if printable {
-				fmt.Println("\t", attr.Name+":", entry.GetAttributeValue(attr.Name))
+				fmt.Println("\t", attr.Name+":", entry.GetAttributeValues(attr.Name))
 			} else {
-				fmt.Println("\t", attr.Name+":", fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
+				fmt.Println("\t", attr.Name+":", fmt.Sprintf("%x", entry.GetRawAttributeValues(attr.Name)))
 			}
 
 		}
@@ -83,6 +84,38 @@ func stalkerDump(bind *ldap.Conn) {
 		}
 	}
 	fi.Close()
+}
+func stalkerMonitor(bind *ldap.Conn) {
+	topLevelObjects := make(map[string][]byte)
+	fmt.Println("Waiting for stable LDAP state...")
+	sr, err := bind.Search(searchRequest)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, entry := range sr.Entries {
+		mapKey := entry.GetAttributeValue("distinguishedName")
+		fmt.Println(mapKey)
+		_, ok := topLevelObjects[mapKey]
+		if !ok {
+			topLevelObjects[mapKey] = []byte{11, 12}
+		}
+		for _, attr := range entry.Attributes {
+			value := entry.GetAttributeValue(attr.Name)
+			printable := true
+			for _, char := range value {
+				if char > unicode.MaxASCII {
+					printable = false
+					break
+				}
+			}
+			if printable {
+				fmt.Println("\t", attr.Name+":", entry.GetAttributeValue(attr.Name))
+			} else {
+				fmt.Println("\t", attr.Name+":", fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
+			}
+
+		}
+	}
 }
 func main() {
 	domainNameSlice := strings.Split(domainName, ".")
@@ -125,6 +158,6 @@ func main() {
 		stalkerDump(l)
 	}
 	if action == "monitor" {
-		//stalkerMonitor(sr.Entries)
+		stalkerMonitor(l)
 	}
 }
