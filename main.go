@@ -140,7 +140,9 @@ func stalkerMonitor(bind *ldap.Conn) {
 				fmt.Println("New object found", mapKey)
 				topLevelObjects[mapKey] = make(map[string]string)
 			} else {
+				var newAttributes []string
 				for _, attr := range entry.Attributes {
+					newAttributes = append(newAttributes, attr.Name)
 					values := entry.GetAttributeValues(attr.Name)
 					value := strings.Join(values, ";")
 					_, nestedOK := topLevelObjects[mapKey][attr.Name]
@@ -153,6 +155,20 @@ func stalkerMonitor(bind *ldap.Conn) {
 							topLevelObjects[mapKey][attr.Name] = value
 						}
 
+					}
+				}
+				
+				for oldAttribute := range topLevelObjects[mapKey] {
+					oldAttibuteFound := false
+					for _, newAttribute := range newAttributes {
+						if oldAttribute == newAttribute {
+							oldAttibuteFound = true
+							break
+						}
+					}
+					if oldAttibuteFound == false {
+						fmt.Println(mapKey, " -> attribute was removed:", oldAttribute)
+						delete(topLevelObjects[mapKey], oldAttribute)
 					}
 				}
 			}
