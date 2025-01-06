@@ -126,9 +126,13 @@ func stalkerMonitor(bind *ldap.Conn) {
 			break
 		}
 	}
-	fmt.Println("Reached stable state. Waiting for changes...")
+	currentTime := time.Now()
+	timestamp := currentTime.Format("2006-01-02 15:04:05")
+	fmt.Println(timestamp, "Reached stable state. Waiting for changes...")
 	for {
 		time.Sleep(1 * time.Second)
+		currentTime := time.Now()
+		timestamp := currentTime.Format("2006-01-02 15:04:05")
 		sr, err := bind.Search(searchRequest)
 		if err != nil {
 			log.Fatal(err)
@@ -137,7 +141,7 @@ func stalkerMonitor(bind *ldap.Conn) {
 			mapKey := entry.GetAttributeValue("distinguishedName")
 			_, ok := topLevelObjects[mapKey]
 			if !ok {
-				fmt.Println("New object found", mapKey)
+				fmt.Println(timestamp, "New object found", mapKey)
 				topLevelObjects[mapKey] = make(map[string]string)
 			} else {
 				var newAttributes []string
@@ -147,17 +151,17 @@ func stalkerMonitor(bind *ldap.Conn) {
 					value := strings.Join(values, ";")
 					_, nestedOK := topLevelObjects[mapKey][attr.Name]
 					if !nestedOK {
-						fmt.Println("New Attribute found", attr.Name+":", value)
+						fmt.Println(timestamp, mapKey, " -> attribute created:", attr.Name+":", value)
 						topLevelObjects[mapKey][attr.Name] = value
 					} else {
 						if topLevelObjects[mapKey][attr.Name] != value {
-							fmt.Println(mapKey, " -> attribute changed:", attr.Name, ":", topLevelObjects[mapKey][attr.Name], "->", value)
+							fmt.Println(timestamp, mapKey, " -> attribute changed:", attr.Name, ":", topLevelObjects[mapKey][attr.Name], "->", value)
 							topLevelObjects[mapKey][attr.Name] = value
 						}
 
 					}
 				}
-				
+
 				for oldAttribute := range topLevelObjects[mapKey] {
 					oldAttibuteFound := false
 					for _, newAttribute := range newAttributes {
@@ -167,7 +171,7 @@ func stalkerMonitor(bind *ldap.Conn) {
 						}
 					}
 					if oldAttibuteFound == false {
-						fmt.Println(mapKey, " -> attribute was removed:", oldAttribute)
+						fmt.Println(timestamp, mapKey, " -> attribute removed:", oldAttribute)
 						delete(topLevelObjects[mapKey], oldAttribute)
 					}
 				}
