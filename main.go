@@ -113,10 +113,26 @@ func stalkerMonitor(bind *ldap.Conn) {
 				for _, attr := range entry.Attributes {
 					values := entry.GetAttributeValues(attr.Name)
 					value := strings.Join(values, ";")
+					printable := true
+					for _, tempVal := range values {
+						for _, char := range tempVal {
+							if (char > unicode.MaxASCII) || (!unicode.IsPrint(char)) {
+								printable = false
+								break
+							}
+						}
+
+					}
+					var newVal string
+					if printable {
+						newVal = value
+					} else {
+						newVal = fmt.Sprintf("%x", value)
+					}
 					_, nestedOK := topLevelObjects[mapKey][attr.Name]
 					if !nestedOK {
 						//fmt.Println("New Attribute found")
-						topLevelObjects[mapKey][attr.Name] = value
+						topLevelObjects[mapKey][attr.Name] = newVal
 						stable = false
 					}
 				}
@@ -130,15 +146,17 @@ func stalkerMonitor(bind *ldap.Conn) {
 	timestamp := currentTime.Format("2006-01-02 15:04:05")
 	fmt.Println(timestamp, "Reached stable state. Waiting for changes...")
 	for {
-		time.Sleep(1 * time.Second)
+		time.Sleep(330 * time.Millisecond)
 		currentTime := time.Now()
 		timestamp := currentTime.Format("2006-01-02 15:04:05")
 		sr, err := bind.Search(searchRequest)
 		if err != nil {
 			log.Fatal(err)
 		}
+		var newKeys []string
 		for _, entry := range sr.Entries {
 			mapKey := entry.GetAttributeValue("distinguishedName")
+			newKeys = append(newKeys, mapKey)
 			_, ok := topLevelObjects[mapKey]
 			if !ok {
 				fmt.Println(timestamp, "New object found", mapKey)
@@ -149,14 +167,30 @@ func stalkerMonitor(bind *ldap.Conn) {
 					newAttributes = append(newAttributes, attr.Name)
 					values := entry.GetAttributeValues(attr.Name)
 					value := strings.Join(values, ";")
+					printable := true
+					for _, tempVal := range values {
+						for _, char := range tempVal {
+							if (char > unicode.MaxASCII) || (!unicode.IsPrint(char)) {
+								printable = false
+								break
+							}
+						}
+
+					}
+					var newVal string
+					if printable {
+						newVal = value
+					} else {
+						newVal = fmt.Sprintf("%x", value)
+					}
 					_, nestedOK := topLevelObjects[mapKey][attr.Name]
 					if !nestedOK {
-						fmt.Println(timestamp, mapKey, " -> attribute created:", attr.Name+":", value)
-						topLevelObjects[mapKey][attr.Name] = value
+						fmt.Println(timestamp, mapKey, " -> attribute created:", attr.Name+":", newVal)
+						topLevelObjects[mapKey][attr.Name] = newVal
 					} else {
-						if topLevelObjects[mapKey][attr.Name] != value {
-							fmt.Println(timestamp, mapKey, " -> attribute changed:", attr.Name, ":", topLevelObjects[mapKey][attr.Name], "->", value)
-							topLevelObjects[mapKey][attr.Name] = value
+						if topLevelObjects[mapKey][attr.Name] != newVal {
+							fmt.Println(timestamp, mapKey, " -> attribute changed:", attr.Name, ":", topLevelObjects[mapKey][attr.Name], "->", newVal)
+							topLevelObjects[mapKey][attr.Name] = newVal
 						}
 
 					}
@@ -175,6 +209,19 @@ func stalkerMonitor(bind *ldap.Conn) {
 						delete(topLevelObjects[mapKey], oldAttribute)
 					}
 				}
+			}
+		}
+		for oldUser := range topLevelObjects {
+			userFound := false
+			for _, newKey := range newKeys {
+				if newKey == oldUser {
+					userFound = true
+					break
+				}
+			}
+			if userFound == false {
+				fmt.Println(timestamp, "Object removed", oldUser)
+				delete(topLevelObjects, oldUser)
 			}
 		}
 	}
