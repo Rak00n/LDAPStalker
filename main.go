@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
 	"log"
+	"os"
 	"strconv"
 	"unicode"
 )
@@ -26,6 +27,53 @@ func init() {
 	flag.Parse()
 }
 
+func stalkerPrint(entries []*ldap.Entry) {
+	for _, entry := range entries {
+		fmt.Println(entry.DN)
+		for _, attr := range entry.Attributes {
+			value := entry.GetAttributeValue(attr.Name)
+			printable := true
+			for _, char := range value {
+				if char > unicode.MaxASCII {
+					printable = false
+					break
+				}
+			}
+			if printable {
+				fmt.Println("\t", attr.Name, entry.GetAttributeValue(attr.Name))
+			} else {
+				fmt.Println("\t", attr.Name, fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
+			}
+
+		}
+	}
+}
+func stalkerDump(entries []*ldap.Entry) {
+	fi, err := os.Create("ldap.dump")
+	if err != nil {
+		panic(err)
+	}
+	for _, entry := range entries {
+		fmt.Println(entry.DN)
+		for _, attr := range entry.Attributes {
+			value := entry.GetAttributeValue(attr.Name)
+			printable := true
+			for _, char := range value {
+				if char > unicode.MaxASCII {
+					printable = false
+					break
+				}
+			}
+			if printable {
+				fmt.Println("\t", attr.Name, entry.GetAttributeValue(attr.Name))
+			} else {
+				fmt.Println("\t", attr.Name, fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
+			}
+
+		}
+	}
+	fi.Close()
+}
 func main() {
 	bindusername := domainName + "\\" + adminUsername
 	bindpassword := adminPassword
@@ -59,31 +107,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//if len(sr.Entries) != 1 {
-	//	fmt.Println(sr)
-	//	fmt.Println(sr.Entries)
-	//	//log.Fatal("User does not exist or too many entries returned")
-	//}
-	for _, entry := range sr.Entries {
-		fmt.Println(entry.DN)
-		for _, attr := range entry.Attributes {
-			value := entry.GetAttributeValue(attr.Name)
-			printable := true
-			for _, char := range value {
-				if char > unicode.MaxASCII {
-					printable = false
-					break
-				}
-			}
-			if printable {
-				fmt.Println("\t", attr.Name, entry.GetAttributeValue(attr.Name))
-			} else {
-				fmt.Println("\t", attr.Name, fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
-			}
-
-		}
+	if action == "print" {
+		stalkerPrint(sr.Entries)
 	}
-	userdn := sr.Entries[0].DN
-	fmt.Println(userdn)
-
+	if action == "dump" {
+		stalkerDump(sr.Entries)
+	}
 }
