@@ -40,9 +40,9 @@ func stalkerPrint(entries []*ldap.Entry) {
 				}
 			}
 			if printable {
-				fmt.Println("\t", attr.Name, entry.GetAttributeValue(attr.Name))
+				fmt.Println("\t", attr.Name+":", entry.GetAttributeValue(attr.Name))
 			} else {
-				fmt.Println("\t", attr.Name, fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
+				fmt.Println("\t", attr.Name+":", fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
 			}
 
 		}
@@ -54,7 +54,7 @@ func stalkerDump(entries []*ldap.Entry) {
 		panic(err)
 	}
 	for _, entry := range entries {
-		fmt.Println(entry.DN)
+		_, err = fi.WriteString(entry.DN + "\r\n")
 		for _, attr := range entry.Attributes {
 			value := entry.GetAttributeValue(attr.Name)
 			printable := true
@@ -65,11 +65,10 @@ func stalkerDump(entries []*ldap.Entry) {
 				}
 			}
 			if printable {
-				fmt.Println("\t", attr.Name, entry.GetAttributeValue(attr.Name))
+				_, err = fi.WriteString("\t" + attr.Name + ": " + entry.GetAttributeValue(attr.Name) + "\r\n")
 			} else {
-				fmt.Println("\t", attr.Name, fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)))
+				_, err = fi.WriteString("\t" + attr.Name + ": " + fmt.Sprintf("%x", entry.GetRawAttributeValue(attr.Name)) + "\r\n")
 			}
-
 		}
 	}
 	fi.Close()
