@@ -20,11 +20,6 @@ var adminPassword string
 var action string
 var searchRequest *ldap.SearchRequest
 
-type stalkerAttribute struct {
-	attributeName  string
-	attributeValue string
-}
-
 func init() {
 	flag.StringVar(&action, "action", "print", "Action to execute. \"print\" - prints all the data to stdout; \"dump\" - save all LDAP data into file ldap.dump; \"monitor\" - start monitoring changes of LDAP")
 	flag.StringVar(&dcIP, "dcip", "127.0.0.1", "LDAP server IP address")
@@ -100,7 +95,7 @@ func stalkerDump(bind *ldap.Conn) {
 	fi.Close()
 }
 func stalkerMonitor(bind *ldap.Conn) {
-	topLevelObjects := make(map[string][]stalkerAttribute)
+	topLevelObjects := make(map[string]map[string]string)
 	fmt.Println("Waiting for stable LDAP state...")
 	for {
 		stable := true
@@ -112,30 +107,18 @@ func stalkerMonitor(bind *ldap.Conn) {
 			mapKey := entry.GetAttributeValue("distinguishedName")
 			_, ok := topLevelObjects[mapKey]
 			if !ok {
-				//fmt.Println("New object found", mapKey)
-				topLevelObjects[mapKey] = []stalkerAttribute{}
+				topLevelObjects[mapKey] = make(map[string]string)
 				stable = false
 			} else {
-				oldAttributes := topLevelObjects[mapKey]
 				for _, attr := range entry.Attributes {
 					values := entry.GetAttributeValues(attr.Name)
 					value := strings.Join(values, ";")
-					attributeFound := false
-					for _, oldAttribute := range oldAttributes {
-						if oldAttribute.attributeName == attr.Name {
-							attributeFound = true
-							if oldAttribute.attributeValue != value {
-								stable = false
-							}
-							break
-						}
-					}
-					if !attributeFound {
-						//fmt.Println("New Attribute Detected", attr.Name+":", value)
-						topLevelObjects[mapKey] = append(topLevelObjects[mapKey], stalkerAttribute{attr.Name, value})
+					_, nestedOK := topLevelObjects[mapKey][attr.Name]
+					if !nestedOK {
+						//fmt.Println("New Attribute found")
+						topLevelObjects[mapKey][attr.Name] = value
 						stable = false
 					}
-
 				}
 			}
 		}
@@ -155,30 +138,22 @@ func stalkerMonitor(bind *ldap.Conn) {
 			_, ok := topLevelObjects[mapKey]
 			if !ok {
 				fmt.Println("New object found", mapKey)
-				topLevelObjects[mapKey] = []stalkerAttribute{}
+				topLevelObjects[mapKey] = make(map[string]string)
 			} else {
-				oldAttributes := topLevelObjects[mapKey]
 				for _, attr := range entry.Attributes {
 					values := entry.GetAttributeValues(attr.Name)
 					value := strings.Join(values, ";")
-					attributeFound := false
-					for _, oldAttribute := range oldAttributes {
-						if oldAttribute.attributeName == attr.Name {
-							attributePointer := &oldAttribute.attributeValue
-							//fmt.Println(attributePointer)
-							attributeFound = true
-							if oldAttribute.attributeValue != value {
-								fmt.Println("Attribute changed:", oldAttribute.attributeValue, "->", attr.Name, value)
-								attributePointer = value
-							}
-							break
+					_, nestedOK := topLevelObjects[mapKey][attr.Name]
+					if !nestedOK {
+						fmt.Println("New Attribute found", attr.Name+":", value)
+						topLevelObjects[mapKey][attr.Name] = value
+					} else {
+						if topLevelObjects[mapKey][attr.Name] != value {
+							fmt.Println(mapKey, " -> attribute changed:", attr.Name, ":", topLevelObjects[mapKey][attr.Name], "->", value)
+							topLevelObjects[mapKey][attr.Name] = value
 						}
-					}
-					if !attributeFound {
-						fmt.Println("New Attribute Detected", attr.Name+":", value)
-						topLevelObjects[mapKey] = append(topLevelObjects[mapKey], stalkerAttribute{attr.Name, value})
-					}
 
+					}
 				}
 			}
 		}
